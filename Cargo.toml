@@ -4,6 +4,7 @@ edition = "2021"
 version = "0.1.0"
 description = "Mutable container for pinned and immutable items."
 license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/pinned-bucket"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
