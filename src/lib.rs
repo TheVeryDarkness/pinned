@@ -5,7 +5,11 @@
 extern crate alloc;
 
 use alloc::{boxed::Box, vec::Vec};
-use core::{mem, ops::Deref, pin::Pin};
+use core::{
+    mem,
+    ops::{Deref, Index},
+    pin::Pin,
+};
 use std::sync::RwLock;
 
 const PANIC: &'static str = "Another thread panicked while holding the lock.";
@@ -38,6 +42,12 @@ impl<T> PinnedList<T> {
     pub fn new() -> Self {
         Self::default()
     }
+    ///
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            sections: Vec::with_capacity(capacity).into(),
+        }
+    }
     /// Push an item into the [PinnedList]
     /// and return the reference to it.
     pub fn push(&self, t: T) -> &T {
@@ -46,6 +56,31 @@ impl<T> PinnedList<T> {
         let r: &T = unsafe { mem::transmute::<&T, &T>(r) };
         self.sections.write().expect(PANIC).push(item);
         r
+    }
+    /// Push a lot of items into the [PinnedList].
+    pub fn extend<'s, U: IntoIterator<Item = T>, V: FromIterator<&'s T>>(&'s self, iter: U) -> V {
+        let mut sec = self.sections.write().expect(PANIC);
+        let len = sec.len();
+        sec.extend(iter.into_iter().map(|item| Box::pin(item)));
+        sec[len..]
+            .iter()
+            .map(|item| {
+                let r = item.deref();
+                let r: &'s T = unsafe { mem::transmute::<&T, &T>(r) };
+                r
+            })
+            .collect()
+    }
+}
+impl<T, I> Index<I> for PinnedList<T>
+where
+    Vec<Pin<Box<T>>>: Index<I, Output = Pin<Box<T>>>,
+{
+    type Output = T;
+    fn index(&self, index: I) -> &Self::Output {
+        let sec = self.sections.read().expect(PANIC);
+        let r = sec.index(index).deref();
+        unsafe { mem::transmute::<&T, &T>(r) }
     }
 }
 
