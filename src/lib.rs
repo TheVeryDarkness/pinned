@@ -31,7 +31,7 @@ const PANIC: &'static str = "Another thread panicked while holding the lock.";
 /// assert_eq!(b, &2);
 /// ```
 /// 
-/// I cannot implement this without a lock inside.
+/// By the way, I cannot implement this without a lock inside.
 /// Borrow checker isn't so smart currently.
 ///
 /// As the items inside are still managed by the container,
