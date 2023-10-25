@@ -30,7 +30,7 @@ const PANIC: &'static str = "Another thread panicked while holding the lock.";
 /// assert_eq!(a, &1);
 /// assert_eq!(b, &2);
 /// ```
-/// 
+///
 /// By the way, I cannot implement this without a lock inside.
 /// Borrow checker isn't so smart currently.
 ///
@@ -59,11 +59,15 @@ impl<T> PinnedList<T> {
     pub fn new() -> Self {
         Self::default()
     }
-    ///
+    /// Create a [PinnedList] with given capacity.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             sections: Vec::with_capacity(capacity).into(),
         }
+    }
+    /// Get current capacity.
+    pub fn capacity(&self) -> usize {
+        self.sections.read().expect(PANIC).capacity()
     }
     /// Push an item into the [PinnedList]
     /// and return the reference to it.
@@ -118,7 +122,7 @@ mod tests {
     #[test]
     fn resize() {
         let v = PinnedList::with_capacity(4);
-        let cap = v.sections.read().expect(PANIC).capacity();
+        let cap = v.capacity();
         let refs: Vec<_> = (0..cap + 1)
             .into_iter()
             .map(|i| {
@@ -126,9 +130,19 @@ mod tests {
                 (r, r as *const usize)
             })
             .collect();
-        eprintln!("{refs:?}");
         let first = &v[0];
         let first = first as *const usize;
         assert_eq!(first, refs[0].1);
+    }
+
+    #[test]
+    fn extend_resize() {
+        let v: PinnedList<usize> = PinnedList::with_capacity(4);
+        let former: Vec<_> = v.extend((0..4).into_iter());
+        let _latter: Vec<_> = v.extend((0..4).into_iter());
+        for i in 0..4 {
+            assert_eq!(former[i], &v[i]);
+            assert_eq!(former[i] as *const usize, &v[i] as *const usize);
+        }
     }
 }
