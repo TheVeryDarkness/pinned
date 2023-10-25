@@ -46,6 +46,10 @@ impl<K, V> PinnedMap<K, V> {
     pub fn new() -> Self {
         Self::default()
     }
+    /// Get the number of elements in [PinnedMap].
+    pub fn len(&self) -> usize {
+        self.sections.read().expect(PANIC).len()
+    }
     /// Push an item into the [PinnedMap]
     /// and return the reference to it.
     pub fn insert(&self, key: K, value: V) -> &V
@@ -79,6 +83,8 @@ mod tests {
         let v = PinnedMap::new();
         let a = v.insert(1, 2);
         let b = v.insert(2, 3);
+
+        assert_eq!(v.len(), 2);
 
         assert_eq!(a, &2);
         assert_eq!(a, v.get(&1).unwrap());

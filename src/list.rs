@@ -60,6 +60,10 @@ impl<T> PinnedList<T> {
     pub fn capacity(&self) -> usize {
         self.sections.read().expect(PANIC).capacity()
     }
+    /// Get the number of elements in [PinnedList].
+    pub fn len(&self) -> usize {
+        self.sections.read().expect(PANIC).len()
+    }
     /// Push an item into the [PinnedList]
     /// and return the reference to it.
     pub fn push(&self, t: T) -> &T {
@@ -107,6 +111,7 @@ mod tests {
         let b = v.push(2);
         assert_eq!(a, &1);
         assert_eq!(b, &2);
+        assert_eq!(v.len(), 2);
     }
 
     /// To ensure that allocated items won't be moved.
@@ -121,6 +126,7 @@ mod tests {
                 (r, r as *const usize)
             })
             .collect();
+        assert_eq!(v.len(), cap + 1);
         let first = &v[0];
         let first = first as *const usize;
         assert_eq!(first, refs[0].1);
@@ -135,5 +141,6 @@ mod tests {
             assert_eq!(former[i], &v[i]);
             assert_eq!(former[i] as *const usize, &v[i] as *const usize);
         }
+        assert_eq!(v.len(), 4 + 4);
     }
 }
