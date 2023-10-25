@@ -9,5 +9,7 @@ extern crate alloc;
 const PANIC: &'static str = "Another thread panicked while holding the lock.";
 
 mod list;
+mod map;
 
 pub use list::PinnedList;
+pub use map::PinnedMap;
