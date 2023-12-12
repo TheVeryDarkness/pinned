@@ -72,6 +72,18 @@ impl<K, V> PinnedMap<K, V> {
             unsafe { mem::transmute::<&V, &V>(r) }
         })
     }
+    /// Get an item in [PinnedMap] if there exists one,
+    /// otherwise push an item into the [PinnedMap]
+    /// and return the reference to it.
+    pub fn get_or_insert(&self, key: K, value: V) -> &V
+    where
+        K: Ord,
+    {
+        let mut guard = self.sections.write().expect(PANIC);
+        let v = guard.entry(key).or_insert(Box::pin(value));
+        let r = v.deref();
+        unsafe { mem::transmute::<&V, &V>(r) }
+    }
 }
 
 #[cfg(test)]
@@ -83,15 +95,27 @@ mod tests {
         let v = PinnedMap::new();
         let a = v.insert(1, 2);
         let b = v.insert(2, 3);
+        let a_ = v.get_or_insert(1, -1);
+        let b_ = v.get_or_insert(2, -1);
 
         assert_eq!(v.len(), 2);
+
+        let c = v.get_or_insert(3, 4);
+
+        assert_eq!(v.len(), 3);
 
         assert_eq!(a, &2);
         assert_eq!(a, v.get(&1).unwrap());
         assert_eq!(a as *const i32, v.get(&1).unwrap() as *const i32);
+        assert_eq!(a, a_);
 
         assert_eq!(b, &3);
         assert_eq!(b, v.get(&2).unwrap());
         assert_eq!(b as *const i32, v.get(&2).unwrap() as *const i32);
+        assert_eq!(b, b_);
+
+        assert_eq!(c, &4);
+        assert_eq!(c, v.get(&3).unwrap());
+        assert_eq!(c as *const i32, v.get(&3).unwrap() as *const i32);
     }
 }
