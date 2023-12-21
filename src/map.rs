@@ -31,6 +31,11 @@ use std::{collections::BTreeMap, sync::RwLock};
 /// drop(v);
 /// assert_eq!(a, &1);
 /// ```
+///
+/// If you [clone](Clone::clone) this,
+/// references to items in new container will be different to
+/// references to those in old container.
+#[derive(Debug)]
 pub struct PinnedMap<K, V> {
     sections: RwLock<BTreeMap<K, Pin<Box<V>>>>,
 }
@@ -85,6 +90,13 @@ impl<K, V> PinnedMap<K, V> {
         unsafe { mem::transmute::<&V, &V>(r) }
     }
 }
+impl<K: Clone, V: Clone> Clone for PinnedMap<K, V> {
+    fn clone(&self) -> Self {
+        let values = self.sections.read().expect(PANIC);
+        let sections = values.clone().into();
+        Self { sections }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -117,5 +129,14 @@ mod tests {
         assert_eq!(c, &4);
         assert_eq!(c, v.get(&3).unwrap());
         assert_eq!(c as *const i32, v.get(&3).unwrap() as *const i32);
+    }
+
+    #[test]
+    fn debug_list() {
+        let v: PinnedMap<usize, usize> = PinnedMap::default();
+        v.insert(1, 2);
+        v.insert(3, 4);
+        let u = v.clone();
+        assert_eq!(format!("{:?}", v), format!("{:?}", u));
     }
 }

@@ -35,6 +35,11 @@ use std::sync::RwLock;
 /// drop(v);
 /// assert_eq!(a, &1);
 /// ```
+///
+/// If you [clone](Clone::clone) this,
+/// references to items in new container will be different to
+/// references to those in old container.
+#[derive(Debug)]
 pub struct PinnedList<T> {
     sections: RwLock<Vec<Pin<Box<T>>>>,
 }
@@ -99,6 +104,13 @@ where
         unsafe { mem::transmute::<&T, &T>(r) }
     }
 }
+impl<T: Clone> Clone for PinnedList<T> {
+    fn clone(&self) -> Self {
+        let values = self.sections.read().expect(PANIC);
+        let sections = values.clone().into();
+        Self { sections }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -142,5 +154,13 @@ mod tests {
             assert_eq!(former[i] as *const usize, &v[i] as *const usize);
         }
         assert_eq!(v.len(), 4 + 4);
+    }
+
+    #[test]
+    fn debug_list() {
+        let v: PinnedList<usize> = PinnedList::with_capacity(2);
+        let _: Vec<_> = v.extend((0..4).into_iter());
+        let u = v.clone();
+        assert_eq!(format!("{:?}", v), format!("{:?}", u));
     }
 }
