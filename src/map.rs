@@ -1,7 +1,10 @@
 use super::PANIC;
 use alloc::boxed::Box;
 use core::{mem, ops::Deref, pin::Pin};
-use std::{collections::BTreeMap, sync::RwLock};
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    sync::RwLock,
+};
 
 /// A map from `K` to `Pin<Box<V>>`.
 ///
@@ -88,6 +91,27 @@ impl<K, V> PinnedMap<K, V> {
         let v = guard.entry(key).or_insert(Box::pin(value));
         let r = v.deref();
         unsafe { mem::transmute::<&V, &V>(r) }
+    }
+    /// Get an item in [PinnedMap] if there exists one,
+    /// otherwise push an item into the [PinnedMap]
+    /// and return the reference to it.
+    pub fn get_or_insert_with(&self, key: K, default: impl Fn() -> V) -> &V
+    where
+        K: Ord,
+    {
+        let mut guard = self.sections.write().expect(PANIC);
+        let value = default();
+        let v = guard.entry(key).or_insert(Box::pin(value));
+        let r = v.deref();
+        unsafe { mem::transmute::<&V, &V>(r) }
+    }
+    /// Get entry with corresponding key.
+    pub fn entry(&mut self, key: K) -> Entry<'_, K, Pin<Box<V>>>
+    where
+        K: Ord,
+    {
+        let guard = self.sections.get_mut().expect(PANIC);
+        guard.entry(key)
     }
 }
 impl<K: Clone, V: Clone> Clone for PinnedMap<K, V> {
