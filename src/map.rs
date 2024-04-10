@@ -111,8 +111,7 @@ impl<K, V> PinnedMap<K, V> {
         K: Ord,
     {
         let mut guard = self.sections.write().expect(PANIC);
-        let value = default();
-        let v = guard.entry(key).or_insert(Box::pin(value));
+        let v = guard.entry(key).or_insert_with(|| Box::pin(default()));
         let r = v.deref();
         unsafe { mem::transmute::<&V, &V>(r) }
     }
@@ -139,13 +138,17 @@ impl<K: Clone, V: Clone> Clone for PinnedMap<K, V> {
 mod tests {
     use super::*;
 
+    fn unreachable<T>() -> T {
+        unreachable!()
+    }
+
     #[test]
     fn it_works() {
         let v = PinnedMap::new();
         let a = v.insert(1, 2);
         let b = v.insert(2, 3);
         let a_ = v.get_or_insert(1, -1);
-        let b_ = v.get_or_insert_with(2, || -1);
+        let b_ = v.get_or_insert_with(2, unreachable);
 
         assert_eq!(v.len(), 2);
 
@@ -154,6 +157,8 @@ mod tests {
         assert_eq!(v.len(), 3);
 
         let d = v.get_or_insert_with(4, || 5);
+
+        v.get_or_insert_with(4, unreachable);
 
         assert_eq!(v.len(), 4);
 
@@ -195,5 +200,23 @@ mod tests {
             format!("{:?}", v.sections.read().unwrap()),
             "{1: \"1\", 2: \"2\"}",
         );
+    }
+
+    #[test]
+    fn insert_with_no_panicked() {
+        let v = PinnedMap::new();
+        v.insert(1, "1".to_owned());
+        v.insert(2, "2".to_owned());
+        v.get_or_insert_with(2, unreachable);
+    }
+
+    #[test]
+    #[should_panic]
+    fn insert_with_panicked() {
+        let v = PinnedMap::new();
+        v.insert(1, "1".to_owned());
+        v.insert(2, "2".to_owned());
+        v.get_or_insert_with(2, unreachable);
+        v.get_or_insert_with(3, unreachable);
     }
 }
