@@ -2,7 +2,7 @@ use super::PANIC;
 use alloc::boxed::Box;
 use core::{mem, ops::Deref, pin::Pin};
 use std::{
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{btree_map::Keys, BTreeMap},
     sync::RwLock,
 };
 
@@ -33,6 +33,17 @@ use std::{
 /// let a = v.insert(1, 2);
 /// drop(v);
 /// assert_eq!(a, &1);
+/// ```
+///
+/// The same to [PinnedMap::keys].
+///
+/// ```compile_fail
+/// use pinned_bucket::*;
+/// let v = PinnedMap::new();
+/// v.insert(1, 2);
+/// let keys = v.keys();
+/// drop(v);
+/// assert_eq!(format!("{:?}", keys), "[1]");
 /// ```
 ///
 /// If you [clone](Clone::clone) this,
@@ -105,13 +116,15 @@ impl<K, V> PinnedMap<K, V> {
         let r = v.deref();
         unsafe { mem::transmute::<&V, &V>(r) }
     }
-    /// Get entry with corresponding key.
-    pub fn entry(&mut self, key: K) -> Entry<'_, K, Pin<Box<V>>>
+    /// Get all keys.
+    ///
+    /// `'a` for any lifetime.
+    pub fn keys(&self) -> Keys<'_, K, Pin<Box<V>>>
     where
         K: Ord,
     {
-        let guard = self.sections.get_mut().expect(PANIC);
-        guard.entry(key)
+        let guard = self.sections.read().expect(PANIC);
+        unsafe { mem::transmute(guard.keys()) }
     }
 }
 impl<K: Clone, V: Clone> Clone for PinnedMap<K, V> {
@@ -132,13 +145,17 @@ mod tests {
         let a = v.insert(1, 2);
         let b = v.insert(2, 3);
         let a_ = v.get_or_insert(1, -1);
-        let b_ = v.get_or_insert(2, -1);
+        let b_ = v.get_or_insert_with(2, || -1);
 
         assert_eq!(v.len(), 2);
 
         let c = v.get_or_insert(3, 4);
 
         assert_eq!(v.len(), 3);
+
+        let d = v.get_or_insert_with(4, || 5);
+
+        assert_eq!(v.len(), 4);
 
         assert_eq!(a, &2);
         assert_eq!(a, v.get(&1).unwrap());
@@ -153,6 +170,10 @@ mod tests {
         assert_eq!(c, &4);
         assert_eq!(c, v.get(&3).unwrap());
         assert_eq!(c as *const i32, v.get(&3).unwrap() as *const i32);
+
+        assert_eq!(d, &5);
+        assert_eq!(d, v.get(&4).unwrap());
+        assert_eq!(d as *const i32, v.get(&4).unwrap() as *const i32);
     }
 
     #[test]
@@ -162,5 +183,17 @@ mod tests {
         v.insert(3, 4);
         let u = v.clone();
         assert_eq!(format!("{:?}", v), format!("{:?}", u));
+    }
+
+    #[test]
+    fn debug_keys() {
+        let v: PinnedMap<usize, String> = PinnedMap::default();
+        v.insert(1, "1".into());
+        v.insert(2, "2".into());
+        assert_eq!(format!("{:?}", v.keys()), "[1, 2]");
+        assert_eq!(
+            format!("{:?}", v.sections.read().unwrap()),
+            "{1: \"1\", 2: \"2\"}",
+        );
     }
 }
