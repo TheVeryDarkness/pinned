@@ -106,7 +106,7 @@ impl<K, V> PinnedMap<K, V> {
     /// Get an item in [PinnedMap] if there exists one,
     /// otherwise push an item into the [PinnedMap]
     /// and return the reference to it.
-    pub fn get_or_insert_with(&self, key: K, default: impl Fn() -> V) -> &V
+    pub fn get_or_insert_with(&self, key: K, default: impl FnOnce() -> V) -> &V
     where
         K: Ord,
     {
@@ -116,8 +116,6 @@ impl<K, V> PinnedMap<K, V> {
         unsafe { mem::transmute::<&V, &V>(r) }
     }
     /// Get all keys.
-    ///
-    /// `'a` for any lifetime.
     pub fn keys(&self) -> Keys<'_, K, Pin<Box<V>>>
     where
         K: Ord,
@@ -203,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn insert_with_no_panicked() {
+    fn insert_with() {
         let v = PinnedMap::new();
         v.insert(1, "1".to_owned());
         v.insert(2, "2".to_owned());
