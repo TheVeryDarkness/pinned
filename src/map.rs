@@ -2,7 +2,10 @@ use super::PANIC;
 use alloc::boxed::Box;
 use core::{mem, ops::Deref, pin::Pin};
 use std::{
-    collections::{btree_map::Keys, BTreeMap},
+    collections::{
+        btree_map::{Keys, Values},
+        BTreeMap,
+    },
     sync::RwLock,
 };
 
@@ -122,6 +125,14 @@ impl<K, V> PinnedMap<K, V> {
     {
         let guard = self.sections.read().expect(PANIC);
         unsafe { mem::transmute(guard.keys()) }
+    }
+    /// Get all values.
+    pub fn values(&self) -> Values<'_, K, Pin<Box<V>>>
+    where
+        K: Ord,
+    {
+        let guard = self.sections.read().expect(PANIC);
+        unsafe { mem::transmute(guard.values()) }
     }
 }
 impl<K: Clone, V: Clone> Clone for PinnedMap<K, V> {
