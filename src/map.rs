@@ -1,6 +1,6 @@
 use super::PANIC;
 use alloc::boxed::Box;
-use core::{mem, ops::Deref, pin::Pin};
+use core::{iter::Map, mem, ops::Deref, pin::Pin};
 use std::{
     collections::{
         btree_map::{Keys, Values},
@@ -127,12 +127,14 @@ impl<K, V> PinnedMap<K, V> {
         unsafe { mem::transmute(guard.keys()) }
     }
     /// Get all values.
-    pub fn values(&self) -> Values<'_, K, Pin<Box<V>>>
+    pub fn values(&self) -> Map<Values<'_, K, Pin<Box<V>>>, fn(&Pin<Box<V>>) -> &V>
     where
         K: Ord,
     {
         let guard = self.sections.read().expect(PANIC);
-        unsafe { mem::transmute(guard.values()) }
+        let values = guard.values();
+        let values: Values<'_, K, Pin<Box<V>>> = unsafe { mem::transmute(values) };
+        values.map(|value| unsafe { mem::transmute(value.as_ref().deref()) })
     }
 }
 impl<K: Clone, V: Clone> Clone for PinnedMap<K, V> {
@@ -188,6 +190,8 @@ mod tests {
         assert_eq!(d, &5);
         assert_eq!(d, v.get(&4).unwrap());
         assert_eq!(d as *const i32, v.get(&4).unwrap() as *const i32);
+
+        assert_eq!(v.values().cloned().collect::<Vec<_>>(), vec![2, 3, 4, 5]);
     }
 
     #[test]
@@ -197,6 +201,7 @@ mod tests {
         v.insert(3, 4);
         let u = v.clone();
         assert_eq!(format!("{:?}", v), format!("{:?}", u));
+        assert_eq!(v.values().cloned().collect::<Vec<_>>(), vec![2, 4]);
     }
 
     #[test]
@@ -209,6 +214,7 @@ mod tests {
             format!("{:?}", v.sections.read().unwrap()),
             "{1: \"1\", 2: \"2\"}",
         );
+        assert_eq!(v.values().collect::<Vec<_>>(), vec!["1", "2"]);
     }
 
     #[test]
