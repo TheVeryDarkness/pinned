@@ -1,13 +1,19 @@
 use super::PANIC;
 use alloc::boxed::Box;
-use core::{iter::Map, mem, ops::Deref, pin::Pin};
-use std::{
-    collections::{
-        btree_map::{Keys, Values},
-        BTreeMap,
-    },
-    sync::RwLock,
-};
+use core::{mem, ops::Deref, pin::Pin};
+use iter::Iter;
+use keys::Keys;
+use std::{collections::BTreeMap, fmt::Debug, sync::RwLock};
+use values::Values;
+
+mod iter;
+mod keys;
+mod values;
+
+fn erase<V>(v: &Pin<Box<V>>) -> &V {
+    let r = v.deref();
+    unsafe { mem::transmute::<&V, &V>(r) }
+}
 
 /// A map from `K` to `Pin<Box<V>>`.
 ///
@@ -119,22 +125,35 @@ impl<K, V> PinnedMap<K, V> {
         unsafe { mem::transmute::<&V, &V>(r) }
     }
     /// Get all keys.
-    pub fn keys(&self) -> Keys<'_, K, Pin<Box<V>>>
+    pub fn keys(&self) -> Keys<'_, K, V>
     where
         K: Ord,
     {
         let guard = self.sections.read().expect(PANIC);
-        unsafe { mem::transmute(guard.keys()) }
+        Keys::new(guard)
     }
     /// Get all values.
-    pub fn values(&self) -> Map<Values<'_, K, Pin<Box<V>>>, fn(&Pin<Box<V>>) -> &V>
+    pub fn values(&self) -> Values<'_, K, V>
     where
         K: Ord,
     {
         let guard = self.sections.read().expect(PANIC);
-        let values = guard.values();
-        let values: Values<'_, K, Pin<Box<V>>> = unsafe { mem::transmute(values) };
-        values.map(|value| unsafe { mem::transmute(value.as_ref().deref()) })
+        Values::new(guard)
+    }
+    /// Get an iterator over all items.
+    pub fn iter(&self) -> Iter<'_, K, V>
+    where
+        K: Ord,
+    {
+        IntoIterator::into_iter(self)
+    }
+}
+impl<'a, K, V> IntoIterator for &'a PinnedMap<K, V> {
+    type Item = (&'a K, &'a V);
+    type IntoIter = Iter<'a, K, V>;
+    fn into_iter(self) -> Self::IntoIter {
+        let guard = self.sections.read().expect(PANIC);
+        Iter::new(guard)
     }
 }
 impl<K: Clone, V: Clone> Clone for PinnedMap<K, V> {
@@ -226,12 +245,56 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic = "internal error: entered unreachable code"]
     fn insert_with_panicked() {
         let v = PinnedMap::new();
         v.insert(1, "1".to_owned());
         v.insert(2, "2".to_owned());
         v.get_or_insert_with(2, unreachable);
         v.get_or_insert_with(3, unreachable);
+    }
+
+    #[test]
+    fn push_while_iter() {
+        let m = PinnedMap::new();
+        m.insert(9, 3);
+        m.insert(8, 2);
+        m.insert(6, 3);
+        m.insert(4, 2);
+        assert_eq!(m.len(), 4);
+        let items = format!("{:?}", m.iter());
+        let keys = format!("{:?}", m.keys());
+        let values = format!("{:?}", m.values());
+        for (k, v) in &m {
+            let v_ = m.get(k).unwrap();
+            assert_eq!(v_, v);
+            assert_eq!(format!("{:?}", m.iter()), items);
+            assert_eq!(format!("{:?}", m.keys()), keys);
+            assert_eq!(format!("{:?}", m.values()), values);
+
+            assert_eq!(m.iter().last(), Some((&9, &3)));
+            assert_eq!(m.keys().last(), Some(&9));
+            assert_eq!(m.values().last(), Some(&3));
+
+            assert_eq!(m.keys().size_hint(), (4, Some(4)));
+            assert_eq!(m.values().size_hint(), (4, Some(4)));
+            assert_eq!(m.iter().size_hint(), (4, Some(4)));
+
+            assert_eq!(m.iter().count(), 4);
+            assert_eq!(m.iter().len(), 4);
+            assert_eq!(m.iter().min(), Some((&4, &2)));
+            assert_eq!(m.iter().max(), Some((&9, &3)));
+
+            assert_eq!(m.keys().count(), 4);
+            assert_eq!(m.keys().len(), 4);
+            assert_eq!(m.keys().min(), Some(&4));
+            assert_eq!(m.keys().max(), Some(&9));
+
+            assert_eq!(m.values().count(), 4);
+            assert_eq!(m.values().len(), 4);
+            assert_eq!(m.values().min(), Some(&2));
+            assert_eq!(m.values().max(), Some(&3));
+        }
+        assert_eq!(m.len(), 4);
     }
 }
