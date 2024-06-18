@@ -8,6 +8,7 @@ use std::{
 
 use super::erase;
 
+/// Iterator over values of [super::PinnedMap].
 pub struct Values<'a, K, V> {
     /// Shall not be read. Only kept here to prevent the map from being modified.
     #[allow(unused)]
@@ -16,7 +17,7 @@ pub struct Values<'a, K, V> {
 }
 
 impl<'a, K, V> Values<'a, K, V> {
-    pub fn new(guard: RwLockReadGuard<'a, BTreeMap<K, Pin<Box<V>>>>) -> Self {
+    pub(super) fn new(guard: RwLockReadGuard<'a, BTreeMap<K, Pin<Box<V>>>>) -> Self {
         let inner = unsafe { std::mem::transmute(guard.values()) };
         Self { guard, inner }
     }

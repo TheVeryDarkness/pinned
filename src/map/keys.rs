@@ -6,6 +6,7 @@ use std::{
     sync::RwLockReadGuard,
 };
 
+/// Iterator over keys of [super::PinnedMap].
 pub struct Keys<'a, K, V> {
     /// Shall not be read. Only kept here to prevent the map from being modified.
     #[allow(unused)]
@@ -14,7 +15,7 @@ pub struct Keys<'a, K, V> {
 }
 
 impl<'a, K, V> Keys<'a, K, V> {
-    pub fn new(guard: RwLockReadGuard<'a, BTreeMap<K, Pin<Box<V>>>>) -> Self {
+    pub(super) fn new(guard: RwLockReadGuard<'a, BTreeMap<K, Pin<Box<V>>>>) -> Self {
         let inner = unsafe { std::mem::transmute(guard.keys()) };
         Self { guard, inner }
     }
