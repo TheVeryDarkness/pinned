@@ -12,4 +12,4 @@ mod list;
 mod map;
 
 pub use list::PinnedList;
-pub use map::PinnedMap;
+pub use map::{Iter, Keys, PinnedMap, Values};
