@@ -86,6 +86,17 @@ impl<K, V> PinnedMap<K, V> {
     pub fn len(&self) -> usize {
         self.sections.read().expect(PANIC).len()
     }
+    /// Check if the [PinnedMap] is empty.
+    pub fn is_empty(&self) -> bool {
+        self.sections.read().expect(PANIC).is_empty()
+    }
+    /// Check if the [PinnedMap] contains a key.
+    pub fn contains_key(&self, key: &K) -> bool
+    where
+        K: Ord,
+    {
+        self.sections.read().expect(PANIC).contains_key(key)
+    }
     /// Push an item into the [PinnedMap]
     /// and return the reference to it.
     pub fn insert(&self, key: K, value: V) -> &V
@@ -264,8 +275,12 @@ mod tests {
         let v = PinnedMap::new();
         let a = v.insert(1, "1".to_owned());
         let b = v.insert(1, "2".to_owned());
+
         assert_eq!(a, "1");
         assert_eq!(b, "2");
+        assert!(!v.is_empty());
+        assert_eq!(v.len(), 1);
+        assert!(v.contains_key(&1));
     }
 
     #[test]
@@ -274,6 +289,11 @@ mod tests {
         v.insert(1, "1".to_owned());
         v.insert(2, "2".to_owned());
         v.get_or_insert_with(2, unreachable);
+
+        assert!(v.contains_key(&1));
+        assert!(v.contains_key(&2));
+        assert_eq!(v.len(), 2);
+        assert!(!v.is_empty());
     }
 
     #[test]
