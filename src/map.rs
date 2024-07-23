@@ -59,14 +59,21 @@ fn erase<V>(v: &Pin<Box<V>>) -> &V {
 /// If you [clone](Clone::clone) this,
 /// references to items in new container will be different to
 /// references to those in old container.
+///
+/// In `strict` mode, the container will panic if you try to
+/// insert an item with the same key.
 #[derive(Debug)]
 pub struct PinnedMap<K, V> {
     sections: RwLock<BTreeMap<K, Pin<Box<V>>>>,
+    #[cfg(not(feature = "strict"))]
+    shadowed: RwLock<Vec<Pin<Box<V>>>>,
 }
 impl<K, V> Default for PinnedMap<K, V> {
     fn default() -> Self {
         Self {
             sections: RwLock::new(BTreeMap::new()),
+            #[cfg(not(feature = "strict"))]
+            shadowed: RwLock::new(Vec::new()),
         }
     }
 }
@@ -88,7 +95,13 @@ impl<K, V> PinnedMap<K, V> {
         let item = Box::pin(value);
         let r = item.deref();
         let r: &V = unsafe { mem::transmute::<&V, &V>(r) };
-        self.sections.write().expect(PANIC).insert(key, item);
+        let prev = self.sections.write().expect(PANIC).insert(key, item);
+        if let Some(_prev) = prev {
+            #[cfg(feature = "strict")]
+            panic!("internal error: duplicated key");
+            #[cfg(not(feature = "strict"))]
+            self.shadowed.write().expect(PANIC).push(_prev);
+        }
         r
     }
     /// Get an item in [PinnedMap].
@@ -161,7 +174,15 @@ impl<K: Clone, V: Clone> Clone for PinnedMap<K, V> {
     fn clone(&self) -> Self {
         let values = self.sections.read().expect(PANIC);
         let sections = values.clone().into();
-        Self { sections }
+        #[cfg(feature = "strict")]
+        {
+            Self { sections }
+        }
+        #[cfg(not(feature = "strict"))]
+        {
+            let shadowed = RwLock::new(Vec::new());
+            Self { sections, shadowed }
+        }
     }
 }
 
@@ -235,6 +256,16 @@ mod tests {
             "{1: \"1\", 2: \"2\"}",
         );
         assert_eq!(v.values().collect::<Vec<_>>(), vec!["1", "2"]);
+    }
+
+    #[test]
+    #[cfg_attr(feature = "strict", should_panic = "internal error: duplicated key")]
+    fn insert_duplicate() {
+        let v = PinnedMap::new();
+        let a = v.insert(1, "1".to_owned());
+        let b = v.insert(1, "2".to_owned());
+        assert_eq!(a, "1");
+        assert_eq!(b, "2");
     }
 
     #[test]
